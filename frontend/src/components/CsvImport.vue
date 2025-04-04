@@ -1,3 +1,4 @@
+// CsvImport.vue
 <template>
   <div class="csv-import-section">
     <div class="card">
@@ -85,3 +86,121 @@
           </button>
         </div>
       </div>
+      
+      <!-- Processing state -->
+      <div v-if="isProcessing" class="processing-state">
+        <div class="spinner"></div>
+        <p class="processing-text">Processing your file...</p>
+      </div>
+      
+      <!-- Success state -->
+      <div v-if="isSuccess" class="success-state">
+        <div class="success-icon-container">
+          <svg class="success-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h3 class="success-title">Import Successful!</h3>
+        <p class="success-message">
+          Successfully imported {{ importedCount }} expenses from your CSV file.
+        </p>
+        <div class="import-summary">
+          <div class="summary-item">
+            <span class="summary-label">Total Amount:</span>
+            <span class="summary-value">${{ importTotal.toFixed(2) }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Date Range:</span>
+            <span class="summary-value">{{ importDateRange }}</span>
+          </div>
+        </div>
+        <button @click="resetImport" class="done-button">Done</button>
+      </div>
+      
+      <!-- Error state -->
+      <div v-if="error" class="error-state">
+        <p class="error-message">{{ error }}</p>
+        <button @click="resetImport" class="retry-button">Try Again</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import Papa from 'papaparse';
+import axios from 'axios';
+
+// Configure the base URL for your API
+const API_URL = 'http://localhost:8000';
+
+export default {
+  name: 'CsvImport',
+  data() {
+    return {
+      isDragging: false,
+      selectedFile: null,
+      csvData: null,
+      csvHeaders: [],
+      columnMapping: {
+        date: '',
+        description: '',
+        amount: ''
+      },
+      isProcessing: false,
+      isSuccess: false,
+      importedCount: 0,
+      importTotal: 0,
+      importDateRange: '',
+      error: null
+    };
+  },
+  computed: {
+    isImportButtonDisabled() {
+      // Disable import button if any mapping is missing
+      return !this.columnMapping.date || 
+             !this.columnMapping.description || 
+             !this.columnMapping.amount;
+    }
+  },
+  methods: {
+    handleDrop(e) {
+      this.isDragging = false;
+      const files = e.dataTransfer.files;
+      if (files.length) {
+        this.processFile(files[0]);
+      }
+    },
+    handleFileSelect(e) {
+      const files = e.target.files;
+      if (files.length) {
+        this.processFile(files[0]);
+      }
+    },
+    processFile(file) {
+      // Only accept CSV files
+      if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+        this.error = 'Please upload a CSV file.';
+        return;
+      }
+      
+      this.selectedFile = file;
+      this.error = null;
+      
+      // Parse CSV to preview and extract headers
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          if (results.errors.length) {
+            this.error = `Error parsing CSV: ${results.errors[0].message}`;
+            return;
+          }
+          
+          this.csvData = results.data;
+          this.csvHeaders = results.meta.fields;
+          
+          // Try to auto-detect column mappings
+          this.autoDetectColumns();
+        },
+        error: (error) => {
+          this.error = `Error reading CSV
