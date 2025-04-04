@@ -6,13 +6,13 @@ from dotenv import load_dotenv
 # Load environment variables from .env file (create this file in your backend directory)
 load_dotenv()
 
-# Get OpenAI API key from environment variables
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Get Gemini API key from environment variables
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Function to categorize expenses using OpenAI API
+# Function to categorize expenses using Gemini API
 async def categorize_with_ai(description: str, amount: float) -> str:
     """
-    Use OpenAI API to categorize an expense based on its description and amount.
+    Use Google's Gemini API to categorize an expense based on its description and amount.
     Returns a category from a predefined list.
     """
     # Define available categories
@@ -22,11 +22,11 @@ async def categorize_with_ai(description: str, amount: float) -> str:
     ]
     
     # If no API key is set, use fallback method
-    if not OPENAI_API_KEY:
-        print("Warning: No OpenAI API key found. Using fallback categorization.")
+    if not GEMINI_API_KEY:
+        print("Warning: No Gemini API key found. Using fallback categorization.")
         return fallback_categorization(description)
     
-    # Create prompt for OpenAI
+    # Create prompt for Gemini
     prompt = f"""
     Categorize this expense into exactly one of these categories: {', '.join(categories)}
     
@@ -36,45 +36,65 @@ async def categorize_with_ai(description: str, amount: float) -> str:
     Respond with only the category name, nothing else.
     """
     
-    # Make request to OpenAI API
+    # Make request to Gemini API
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
                 headers={
-                    "Authorization": f"Bearer {OPENAI_API_KEY}",
                     "Content-Type": "application/json"
                 },
+                params={
+                    "key": GEMINI_API_KEY
+                },
                 json={
-                    "model": "gpt-3.5-turbo",
-                    "messages": [
-                        {"role": "system", "content": "You are an AI assistant that categorizes expenses accurately."},
-                        {"role": "user", "content": prompt}
+                    "contents": [
+                        {
+                            "role": "user",
+                            "parts": [{"text": prompt}]
+                        }
                     ],
-                    "temperature": 0.3,  # Lower temperature for more predictable outputs
-                    "max_tokens": 10
+                    "generationConfig": {
+                        "temperature": 0.2,
+                        "maxOutputTokens": 10
+                    }
                 },
                 timeout=10.0
             )
             
             if response.status_code == 200:
                 response_data = response.json()
-                category = response_data["choices"][0]["message"]["content"].strip()
+                # Extract the text from the Gemini response
+                text = response_data["candidates"][0]["content"]["parts"][0]["text"].strip()
                 
-                # Ensure the category is valid
-                if category in categories:
-                    return category
-                else:
-                    # Default to "Other" if the AI didn't return a valid category
-                    return "Other"
+                # Find which category is in the response
+                for category in categories:
+                    if category.lower() in text.lower():
+                        return category
+                
+                # If no exact match, try to find the closest match
+                return find_closest_category(text, categories)
             else:
                 # If API call fails, use fallback method
-                print(f"OpenAI API request failed with status code {response.status_code}")
+                print(f"Gemini API request failed with status code {response.status_code}")
+                print(f"Response: {response.text}")
                 return fallback_categorization(description)
                 
         except Exception as e:
-            print(f"Error calling OpenAI API: {str(e)}")
+            print(f"Error calling Gemini API: {str(e)}")
             return fallback_categorization(description)
+
+def find_closest_category(text, categories):
+    """Find the most likely category from the API response"""
+    text_lower = text.lower()
+    
+    # First try exact matches
+    for category in categories:
+        if category.lower() in text_lower:
+            return category
+    
+    # If no match, return "Other"
+    return "Other"
 
 # Fallback categorization method if API call fails
 def fallback_categorization(description: str) -> str:
