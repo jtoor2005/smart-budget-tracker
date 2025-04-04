@@ -2,11 +2,14 @@
   <div class="expense-tracker">
     <nav class="navbar">
       <div class="container">
-        <h1 class="app-title">Expense Tracker</h1>
+        <h1 class="app-title">Smart Expense Tracker</h1>
       </div>
     </nav>
     
     <div class="main-container">
+      <!-- CSV Import Component -->
+      <CsvImport @import-complete="fetchExpenses" class="csv-import-wrapper" />
+      
       <div class="content-grid">
         <!-- Expense Form Column -->
         <div class="form-column">
@@ -101,7 +104,7 @@
     
     <footer class="footer">
       <div class="container">
-        <p class="footer-text">Expense Tracker App © {{ new Date().getFullYear() }}</p>
+        <p class="footer-text">Smart Expense Tracker © {{ new Date().getFullYear() }}</p>
       </div>
     </footer>
   </div>
@@ -109,11 +112,15 @@
 
 <script>
 import axios from 'axios';
+import CsvImport from './components/CsvImport.vue';
 
 // Configure the base URL for your API
 const API_URL = 'http://localhost:8000'; // Change this to deployed API URL in production
 
 export default {
+  components: {
+    CsvImport
+  },
   data() {
     return {
       newExpense: {
@@ -239,6 +246,11 @@ body {
   flex: 1;
   padding: 2.5rem 0;
   margin-bottom: 0;
+}
+
+.csv-import-wrapper {
+  max-width: 80%;
+  margin: 0 auto 2rem auto;
 }
 
 .content-grid {
@@ -652,4 +664,3 @@ body {
     padding: 0.875rem 1rem;
   }
 }
-</style>
