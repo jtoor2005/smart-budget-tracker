@@ -1,4 +1,4 @@
-// CsvImport.vue
+<!-- src/components/CsvImport.vue -->
 <template>
   <div class="csv-import-section">
     <div class="card">
@@ -45,7 +45,7 @@
           </div>
           
           <!-- File mapping options -->
-          <div class="mapping-options">
+          <div class="mapping-options" v-if="csvHeaders.length > 0">
             <h3 class="mapping-title">Column Mapping</h3>
             <p class="mapping-description">
               Please match your CSV columns to our expense fields:
@@ -53,17 +53,9 @@
             
             <div class="mapping-form">
               <div class="mapping-group">
-                <label class="mapping-label">Date Column:</label>
-                <select v-model="columnMapping.date" class="mapping-select">
-                  <option v-for="header in csvHeaders" :key="header" :value="header">
-                    {{ header }}
-                  </option>
-                </select>
-              </div>
-              
-              <div class="mapping-group">
                 <label class="mapping-label">Description Column:</label>
                 <select v-model="columnMapping.description" class="mapping-select">
+                  <option value="">Select column</option>
                   <option v-for="header in csvHeaders" :key="header" :value="header">
                     {{ header }}
                   </option>
@@ -73,6 +65,7 @@
               <div class="mapping-group">
                 <label class="mapping-label">Amount Column:</label>
                 <select v-model="columnMapping.amount" class="mapping-select">
+                  <option value="">Select column</option>
                   <option v-for="header in csvHeaders" :key="header" :value="header">
                     {{ header }}
                   </option>
@@ -109,10 +102,6 @@
             <span class="summary-label">Total Amount:</span>
             <span class="summary-value">${{ importTotal.toFixed(2) }}</span>
           </div>
-          <div class="summary-item">
-            <span class="summary-label">Date Range:</span>
-            <span class="summary-value">{{ importDateRange }}</span>
-          </div>
         </div>
         <button @click="resetImport" class="done-button">Done</button>
       </div>
@@ -142,7 +131,6 @@ export default {
       csvData: null,
       csvHeaders: [],
       columnMapping: {
-        date: '',
         description: '',
         amount: ''
       },
@@ -150,16 +138,13 @@ export default {
       isSuccess: false,
       importedCount: 0,
       importTotal: 0,
-      importDateRange: '',
       error: null
     };
   },
   computed: {
     isImportButtonDisabled() {
       // Disable import button if any mapping is missing
-      return !this.columnMapping.date || 
-             !this.columnMapping.description || 
-             !this.columnMapping.amount;
+      return !this.columnMapping.description || !this.columnMapping.amount;
     }
   },
   methods: {
@@ -191,7 +176,7 @@ export default {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
-          if (results.errors.length) {
+          if (results.errors && results.errors.length) {
             this.error = `Error parsing CSV: ${results.errors[0].message}`;
             return;
           }
@@ -203,4 +188,102 @@ export default {
           this.autoDetectColumns();
         },
         error: (error) => {
-          this.error = `Error reading CSV
+          this.error = `Error reading CSV: ${error}`;
+        }
+      });
+    },
+    autoDetectColumns() {
+      // Auto-detect description column
+      const descriptionKeywords = ['description', 'desc', 'transaction', 'details', 'memo', 'notes'];
+      const amountKeywords = ['amount', 'price', 'payment', 'cost', 'total', 'value'];
+      
+      // Find potential description column
+      for (const header of this.csvHeaders) {
+        const headerLower = header.toLowerCase();
+        if (descriptionKeywords.some(keyword => headerLower.includes(keyword))) {
+          this.columnMapping.description = header;
+          break;
+        }
+      }
+      
+      // Find potential amount column
+      for (const header of this.csvHeaders) {
+        const headerLower = header.toLowerCase();
+        if (amountKeywords.some(keyword => headerLower.includes(keyword))) {
+          this.columnMapping.amount = header;
+          break;
+        }
+      }
+    },
+    removeFile() {
+      this.selectedFile = null;
+      this.csvData = null;
+      this.csvHeaders = [];
+      this.columnMapping = {
+        description: '',
+        amount: ''
+      };
+      this.error = null;
+    },
+    async importExpenses() {
+      if (!this.csvData || !this.columnMapping.description || !this.columnMapping.amount) {
+        return;
+      }
+      
+      this.isProcessing = true;
+      this.error = null;
+      
+      try {
+        // Map CSV data to expenses
+        const expenses = this.csvData.map(row => {
+          const description = row[this.columnMapping.description];
+          const amountStr = row[this.columnMapping.amount].replace(/[^\d.-]/g, '');
+          const amount = parseFloat(amountStr);
+          
+          if (!description || isNaN(amount)) {
+            return null;
+          }
+          
+          return {
+            description: description,
+            amount: Math.abs(amount) // Use absolute value for now
+          };
+        }).filter(expense => expense !== null);
+        
+        if (expenses.length === 0) {
+          throw new Error('No valid expenses found in the CSV.');
+        }
+        
+        // Send to backend
+        const response = await axios.post(`${API_URL}/import_expenses/`, expenses);
+        
+        // Calculate import summary
+        this.importedCount = response.data.length;
+        this.importTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+        
+        // Show success state
+        this.isSuccess = true;
+        
+        // Emit event for parent component to refresh expenses
+        this.$emit('import-complete');
+        
+      } catch (error) {
+        console.error('Error importing expenses:', error);
+        this.error = error.response?.data?.detail || error.message || 'Failed to import expenses';
+      } finally {
+        this.isProcessing = false;
+      }
+    },
+    resetImport() {
+      this.selectedFile = null;
+      this.csvData = null;
+      this.csvHeaders = [];
+      this.columnMapping = {
+        description: '',
+        amount: ''
+      };
+      this.isSuccess = false;
+      this.error = null;
+    }
+  }
+}
