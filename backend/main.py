@@ -1,8 +1,14 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 import random
+from sqlalchemy.orm import Session
+from database import get_db
+from models import ExpenseModel, BudgetModel
+
+# Import budget endpoints
+import budget_endpoints
 
 app = FastAPI()
 
@@ -24,14 +30,8 @@ class Expense(BaseModel):
 class ExpenseInDB(Expense):
     id: int
 
-# Sample categories for auto-categorization (simple version)
-categories = [
-    "Food", "Shopping", "Transportation", "Entertainment", 
-    "Utilities", "Housing", "Healthcare", "Other"
-]
-
-# In-memory database (replace with actual database in production)
-expenses_db = []
+# Include budget router
+app.include_router(budget_endpoints.router)
 
 # Import AI categorization function
 from ai_categorization import categorize_with_ai, fallback_categorization
@@ -49,70 +49,76 @@ async def auto_categorize(description: str, amount: float = 0) -> str:
 
 # Get all expenses
 @app.get("/expenses/", response_model=List[ExpenseInDB])
-async def get_expenses():
-    return expenses_db
+async def get_expenses(db: Session = Depends(get_db)):
+    expenses = db.query(ExpenseModel).all()
+    return expenses
 
 # Add a new expense
 @app.post("/add_expense/", response_model=ExpenseInDB)
-async def add_expense(expense: Expense):
+async def add_expense(expense: Expense, db: Session = Depends(get_db)):
     # Auto-categorize if no category provided
     if not expense.category:
         expense.category = await auto_categorize(expense.description, expense.amount)
     
     # Create a new expense with ID
-    new_id = len(expenses_db) + 1
-    expense_db = ExpenseInDB(id=new_id, **expense.dict())
+    db_expense = ExpenseModel(**expense.dict())
     
     # Add to database
-    expenses_db.insert(0, expense_db)  # Insert at the beginning to match frontend behavior
+    db.add(db_expense)
+    db.commit()
+    db.refresh(db_expense)
     
-    return expense_db
+    return db_expense
 
 # Get expense by ID
 @app.get("/expenses/{expense_id}", response_model=ExpenseInDB)
-async def get_expense(expense_id: int):
-    for expense in expenses_db:
-        if expense.id == expense_id:
-            return expense
-    raise HTTPException(status_code=404, detail="Expense not found")
+async def get_expense(expense_id: int, db: Session = Depends(get_db)):
+    expense = db.query(ExpenseModel).filter(ExpenseModel.id == expense_id).first()
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return expense
 
 # Delete expense
 @app.delete("/expenses/{expense_id}")
-async def delete_expense(expense_id: int):
-    for i, expense in enumerate(expenses_db):
-        if expense.id == expense_id:
-            expenses_db.pop(i)
-            return {"message": "Expense deleted successfully"}
-    raise HTTPException(status_code=404, detail="Expense not found")
+async def delete_expense(expense_id: int, db: Session = Depends(get_db)):
+    expense = db.query(ExpenseModel).filter(ExpenseModel.id == expense_id).first()
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    db.delete(expense)
+    db.commit()
+    return {"message": "Expense deleted successfully"}
 
 # Get expenses by category
 @app.get("/expenses/category/{category}", response_model=List[ExpenseInDB])
-async def get_expenses_by_category(category: str):
-    filtered_expenses = [expense for expense in expenses_db if expense.category.lower() == category.lower()]
+async def get_expenses_by_category(category: str, db: Session = Depends(get_db)):
+    filtered_expenses = db.query(ExpenseModel).filter(ExpenseModel.category.ilike(f"%{category}%")).all()
     return filtered_expenses
 
 # Get total amount spent
 @app.get("/total/")
-async def get_total():
-    total = sum(expense.amount for expense in expenses_db)
+async def get_total(db: Session = Depends(get_db)):
+    from sqlalchemy import func
+    total = db.query(func.sum(ExpenseModel.amount)).scalar() or 0
     return {"total": total}
 
 # Import expenses from CSV
 @app.post("/import_expenses/", response_model=List[ExpenseInDB])
-async def import_expenses(expenses: List[Expense]):
+async def import_expenses(expenses: List[Expense], db: Session = Depends(get_db)):
     imported_expenses = []
     for expense in expenses:
         # Auto-categorize if no category provided
         if not expense.category:
-            expense.category = auto_categorize(expense.description)
+            expense.category = await auto_categorize(expense.description, expense.amount)
         
         # Create a new expense with ID
-        new_id = len(expenses_db) + 1
-        expense_db = ExpenseInDB(id=new_id, **expense.dict())
+        db_expense = ExpenseModel(**expense.dict())
         
         # Add to database
-        expenses_db.append(expense_db)
-        imported_expenses.append(expense_db)
+        db.add(db_expense)
+        db.commit()
+        db.refresh(db_expense)
+        
+        imported_expenses.append(db_expense)
     
     return imported_expenses
 
