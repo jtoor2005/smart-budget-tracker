@@ -251,6 +251,7 @@ body {
   flex: 1;
   padding: 2.5rem 0;
   margin-bottom: 0;
+  padding-bottom: 5rem; /* More padding at the bottom */
 }
 
 .csv-import-wrapper {
@@ -260,6 +261,7 @@ body {
 
 .budget-tracker-wrapper {
   margin-top: 2rem;
+  margin-bottom: 4rem; /* Add more space at the bottom */
 }
 
 .content-grid {
@@ -284,8 +286,9 @@ body {
   border-radius: 10px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
   padding: 2rem; /* More padding */
-  height: 100%; /* Full height */
-  min-height: 350px; /* Minimum height */
+  min-height: auto;  /* Remove fixed height */
+  height: auto;      /* Let cards size to content */
+  margin-bottom: 1.5rem; /* Add space between cards */
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
@@ -620,10 +623,12 @@ body {
 .footer {
   background-color: #f8fafc;
   padding: 1.25rem 0;
-  margin-top: 2rem;
+  margin-top: 4rem;  /* More space above footer */
   border-top: 1px solid #e5e7eb;
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.02);
   width: 100%;
+  position: relative; /* Ensure footer is in normal flow */
+  z-index: 10;       /* Make sure footer is above other content */
 }
 
 .footer-text {
@@ -653,7 +658,6 @@ body {
   
   .card {
     padding: 1.5rem;
-    min-height: 300px;
   }
   
   .card-title {

@@ -276,11 +276,26 @@ export default {
   margin-bottom: 2rem;
 }
 
+.budget-tracker .card {
+  margin-bottom: 3rem; /* Extra margin at bottom */
+  border: 2px solid #e5e7eb; /* Make border more visible */
+  background-color: #ffffff; /* Ensure white background */
+  position: relative;     /* For proper positioning */
+  z-index: 5;            /* Ensure card is above footer */
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); /* Stronger shadow */
+}
+
 .budget-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
+}
+
+.budget-tracker .card-title {
+  font-size: 1.6rem; /* Larger title */
+  color: #1e40af; /* Blue title color */
+  margin-bottom: 2rem; /* More space below title */
 }
 
 .add-budget-button {
@@ -409,7 +424,8 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem 0;
+  padding: 4rem 0;
+  margin: 1rem 0;
   color: #6b7280;
 }
 
